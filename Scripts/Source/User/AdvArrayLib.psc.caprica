@@ -1,0 +1,637 @@
+ScriptName AdvArrayLib
+{ A utility library that allows users of the reference Papyrus compiler
+ to do things that the compiler would normally forbid.
+
+ Will only compile with Caprica, so using the pre-compiled .pex is recommended.
+
+           DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
+                   Version 2, December 2004
+ 
+Copyright (C) 2004 Sam Hocevar <sam@hocevar.net>
+
+Everyone is permitted to copy and distribute verbatim or modified
+copies of this license document, and changing it is allowed as long
+as the name is changed.
+ 
+           DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
+  TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
+
+ 0. You just DO WHAT THE FUCK YOU WANT TO.
+}
+
+Struct v
+	var[] e ; element
+	v[] a ; array (can be recursive)
+EndStruct
+
+Struct BigArr
+	int size
+	int levels
+	v a
+EndStruct
+
+; reloadscript "AdvArrayLib"
+
+; Generic big arrays
+BigArr Function GetBigArr(int size, Var init) global
+{Creates a pseudo-Var[] with a max size of 2^21, with minimal overhead.
+
+Example:
+AdvArrayLib:BigArr arr = AdvArrayLib.GetBigArr(80000)
+
+AdvArrayLib.Set(arr, 10000, 1.0)
+AdvArrayLib.Set(arr, 20000, 6)
+AdvArrayLib.Set(arr, 70000, Game.GetPlayer())
+
+float a = AdvArrayLib.Get(10000) as float	; 1.0
+int b = AdvArrayLib.Get(20000) as int		; 6
+Actor c = AdvArrayLib.Get(70000) as Actor	; PlayerRef
+}
+	int levels
+	
+	v base = new v
+	v[] a
+	var[] e
+	
+	if (size > 16384) ; 20k
+		levels = 3
+		; 3-dim array
+		
+		; generate "solid" part of array
+		int x = size / 16384 ; 1
+		int y = 128
+		int z = 128
+		a = Getv3D(x, y, z, init)
+		
+		; now the partially-full parts...
+		int xRem = size % 16384
+		if (xRem)
+			; 20k = 1 full 3d + 28 full y + 32 z
+			int yFull = xRem / 128
+			int zLast = xRem % 128
+			; Debug.Trace("yFull=" + yFull + ", zLast=" + zLast)
+			
+			if (yFull)
+				; add "full" y-level arrays...
+				v exX = new v
+				exX.a = Getv2D(yFull, 128, init)
+				a.Add(exX)
+			endif
+			
+			;if (zLast)
+			;	; now tack a mostly-empty y-array onto the z array
+			;	a[a.Length-1].a.Add(Getv2D(1, zLast, init)[0])
+			;endif
+			
+			if (zLast)
+				; now tack a mostly-empty y-array onto the z array
+				v[] xFA = a[a.Length-1].a
+				if (xFA.Length == 128)
+					; last X array is full, so add a new element and tack the new Y array onto that
+					v exX = new v
+					exX.a = new v[0]
+					a.Add(exX)
+					xFA = exX.a
+				endif
+				xFA.Add(Getv2D(1, zLast, init)[0])
+			endif
+		endif
+
+		base.a = a
+	elseif (size > 128)
+		; 2-dim array
+		levels = 2
+		
+		int x = size / 128
+		a = Getv2D(x, 128, init)
+		
+		int rem = size % 128
+		if (rem)
+			v extra = new v
+			e = new Var[rem]
+			extra.e = e
+			a.Add(extra)
+			
+			if (init as string != "None")
+				for int i = 0 to rem - 1
+					e[i] = init
+				endfor
+			endif
+		endif
+		
+		base.a = a
+	else
+		; 1-dim array
+		levels = 1
+		
+		e = new Var[size]
+		base.e = e
+		
+		if (init as string != "None")
+			for int i = 0 to size - 1
+				e[i] = init
+			endfor
+		endif
+	endif
+	
+	BigArr arr = new BigArr
+	arr.size = size
+	arr.levels = levels
+	arr.a = base
+	; Debug.Trace(arr)
+	
+	return arr
+EndFunction
+
+Function DeleteArr(BigArr arr) global
+{Dismantles the array's internal data structures, which may or may not help the
+engine's garbage collector clean up dereferenced arrays faster--may be placebo}
+	
+	; no point in making the calling script wait for this to finish
+	var[] params = new var[1]
+	params[0] = arr
+	Utility.CallGlobalFunctionNoWait("AdvArrayLib", "DeleteArrPRIVATE", params)
+EndFunction
+
+Function DeleteArrPRIVATE(BigArr arr) global
+	int i = arr.levels
+	int x
+	int y
+	int z
+	
+	if (i == 3)
+		; arr.a.a[x].a[y].e[z]
+		v baseV = arr.a
+		for x = 0 to baseV.a.Length-1
+			v xV =  baseV.a[x]
+			for y = 0 to xV.a.Length-1
+				;Var[] yVA =  xV.a[y].e
+				;for z = 0 to yVA.Length-1
+				;	yVA[z] = None
+				;endfor
+				xV.a[y].e.Clear()
+				xV.a[y].e = None
+				xV.a[y] = None
+			endfor
+			xV.a = None
+		endfor
+		baseV.a = None
+	elseif (i == 2)
+		; arr.a.a[x].e[y]
+		v baseV = arr.a
+		for x = 0 to baseV.a.Length-1
+			baseV.a[x].e = None
+			baseV.a[x] = None
+		endfor
+		baseV.a = None
+	else
+		arr.a.e = None
+	endif
+	
+	arr.a = None
+EndFunction
+
+Var Function Get(BigArr arr, int index) global
+	int i = arr.levels
+	int x
+	int y
+	int z
+	if (i == 3)
+		x = index / 16384
+		y = (index / 128) % 128
+		z = index % 128
+		return arr.a.a[x].a[y].e[z]
+	elseif (i == 2)
+		x = index / 128
+		y = index % 128
+		return arr.a.a[x].e[y]
+	elseif (i == 1)
+		return arr.a.e[index]
+	else
+		return None
+	endif
+EndFunction
+
+int Function Find(BigArr arr, Var element, int index = 0, bool reverse = false) global
+{Like Array.RFind, looks backwards for the first occurrence of 'element', in array 'arr', starting at 'index'
+
+IMPORTANT: For technical reasons, this must cast everything to a string before searching.
+This means that if you pass in 1 (int), and have "1" (string) in the array, the function
+may find the string "1" first.}
+	int i = arr.levels
+	int x
+	int y
+	int z
+	if (i == 3)
+		x = index / 16384
+		y = (index / 128) % 128
+		z = index % 128
+		int[] r = Find3D(arr, element, x, y, z, reverse)
+		if (r == None)
+			return -1
+		else
+			return r[0]*16384 + r[1]*128 + r[2]
+		endif
+	elseif (i == 2)
+		x = index / 128
+		y = index % 128
+		int[] r = Find2D(arr, element, x, y, reverse)
+		if (r == None)
+			return -1
+		else
+			return r[0]*128 + r[1]
+		endif
+	elseif (i == 1)
+		return AdvArrayLibOff.VarArrToStringArr(arr.a.e).Find(element as string, index)
+	else
+		return -1
+	endif
+EndFunction
+
+int Function RFind(BigArr arr, Var element, int index = -1) global
+{Like Array.RFind, looks backwards for the first occurrence of 'element', in array 'arr', starting at 'index'
+
+IMPORTANT: For technical reasons, this must cast everything to a string before searching.
+This means that if you pass in 1 (int), and have "1" (string) in the array, the function
+may find the string "1" first.}
+	int i = arr.levels
+	int x
+	int y
+	int z
+	if (i == 3)
+		x = index / 16384
+		y = (index / 128) % 128
+		z = index % 128
+		;Debug.Trace("Called RFind3D(arr, "+element+", "+x+", "+y+", "+z+")")
+		int[] r = RFind3D(arr, element, x, y, z)
+		;Debug.Trace("Return value=" + r)
+		if (r == None)
+			return -1
+		else
+			return r[0]*16384 + r[1]*128 + r[2]
+		endif
+	elseif (i == 2)
+		x = index / 128
+		y = index % 128
+		int[] r = RFind2D(arr, element, x, y)
+		if (r == None)
+			return -1
+		else
+			return r[0]*128 + r[1]
+		endif
+	elseif (i == 1)
+		; return arr.a.e.RFind(element, index)
+		return AdvArrayLibOff.VarArrToStringArr(arr.a.e).RFind(element as string, index)
+	else
+		return -1
+	endif
+EndFunction
+
+;Function wtf() global
+;{Just some test code some things}
+;	Var[] v = new var[128]
+;	; v[0] = 1
+;	v[64] = 6
+;	v[32] = "A"
+;	
+;	;var vAsVar
+;	;int[] vAsIntArr
+;	;
+;	;vAsVar = VarArrayToVar( as var
+;	;
+;;	Debug.Trace(v)
+;	;Debug.Trace(vAsVar)
+;	; Debug.Trace(vAsIntArr)
+;;	Debug.Trace((VarArrayToVar(v) as int[]))
+;;	Debug.Trace((VarArrayToVar(v) as int[]).Find(6 as int, 0))
+;	;Debug.Trace(v.Find(1 as int, 0))
+;	; Debug.Trace(v.Find(1 as var, 0))
+;	
+;	String[] vS = (VarArrayToVar(v) as String[])
+;	Debug.Trace(vS.Find(6 as string, 0))
+;	return
+;	
+;	; Debug.Trace(v.Find("A", 0))
+;	; Debug.Trace((v as int[]).Find("1", 0))
+;	for int i = 0 to 127
+;		;int o
+;		var v2 = v[i]
+;		if (v[i] is int)
+;			Debug.Trace("at least " + i + " is an int...")
+;		;	o = v[i] as int
+;		endif
+;		
+;		if (v2 == (1 as var))
+;			Debug.Trace(i + " is the thing")
+;		else
+;			if (v2 as string == 1 as string)
+;				Debug.Trace(i + " is the thing as a string...")
+;			else
+;				Debug.Trace(v[i] + " != " + 1)
+;			endif
+;		endif
+;	endfor
+;EndFunction
+
+int[] Function Find2D(BigArr arr, Var element, int x = 0, int y = 0) global
+{Like Array.Find, Looks for elements in y, then x, so (0,0) < (0,1) < (1,0) < (0,32) < (32,0) < (32,64) etc
+
+IMPORTANT: For technical reasons, this must cast everything to a string before searching.
+This means that if you pass in 1 (int), and have "1" (string) in the array, the function
+may find the string "1" first.}
+	int[] r
+	string asStr = element as string
+	v[] base = arr.a.a
+	int xLen = base.Length
+	while (x < xLen)
+		; doesn't work, I guess because the script engine does not allow comparison of vars?
+		; y = base[x].e.Find(element, y)
+		; Debug.Trace("Looking for " + element + " in " + base[x].e + " = " + y)
+		y = AdvArrayLibOff.VarArrToStringArr(base[x].e).Find(asStr, y)
+		; Debug.Trace("Looking for " + asStr + " in " + AdvArrayLibOff.VarArrToStringArr(base[x].e) + " = " + y)
+		if (y >= 0)
+			r = new int[2]
+			r[0] = x
+			r[1] = y
+			return r
+		endif
+		y = 0
+		x += 1
+	endwhile
+	
+	return None
+EndFunction
+
+int[] Function RFind2D(BigArr arr, Var element, int x = -1, int y = -1) global
+{Like Array.RFind, looks for elements in y, then x, so (0,0) < (0,1) < (1,0) < (0,32) < (32,0) < (32,64) etc
+
+IMPORTANT: For technical reasons, this must cast everything to a string before searching.
+This means that if you pass in 1 (int), and have "1" (string) in the array, the function
+may find the string "1" first.}
+	int[] r
+	string asStr = element as string
+	v[] base = arr.a.a
+	int xLen = base.Length
+	if (x == -1)
+		x = xLen - 1
+	endif
+	while (x >= 0)
+		; y = base[x].e.RFind(element, y) 
+		; Debug.Trace(x +","+ y)
+		y = AdvArrayLibOff.VarArrToStringArr(base[x].e).RFind(asStr, y) 
+		if (y >= 0)
+			r = new int[2]
+			r[0] = x
+			r[1] = y
+			return r
+		endif
+		x -= 1
+	endwhile
+	
+	return None
+EndFunction
+
+int[] Function Find3D(BigArr arr, Var element, int x = 0, int y = 0, int z = 0) global
+{Like Array.Find, looks for elements in z, then y, then x, so (0,0,0) < (0,1,0) < (1,0,0) < (1,32,0) < (2,0,0) etc
+
+IMPORTANT: For technical reasons, this must cast everything to a string before searching.
+This means that if you pass in 1 (int), and have "1" (string) in the array, the function
+may find the string "1" first.}
+	int[] r
+	v[] base = arr.a.a
+	string asStr = element as string
+	int xLen = base.Length
+	while (x < xLen)
+		v[] xV = base[x].a
+		int yLen = xV.Length
+		while (y < yLen)
+			; z = xV[y].e.Find(element, z)
+			z = AdvArrayLibOff.VarArrToStringArr(xV[y].e).Find(asStr, z) 
+			if (z >= 0)
+				r = new int[3]
+				r[0] = x
+				r[1] = y
+				r[2] = z
+				return r
+			endif
+			z = 0
+			y += 1
+		endwhile
+		y = 0
+		x += 1
+	endwhile
+	
+	return None
+EndFunction
+
+int[] Function RFind3D(BigArr arr, Var element, int x = -1, int y = -1, int z = -1) global
+{Like Array.RFind, looks for elements in z, then y, then x, so (0,0,0) < (0,1,0) < (1,0,0) < (1,32,0) < (2,0,0) etc
+
+IMPORTANT: For technical reasons, this must cast everything to a string before searching.
+This means that if you pass in 1 (int), and have "1" (string) in the array, the function
+may find the string "1" first.}
+	int[] r
+	v[] base = arr.a.a
+	string asStr = element as string
+	if (x == -1)
+		x = base.Length-1
+	endif
+	if (y == -1)
+		y = base[x].a.Length-1
+	endif
+	int yBase = base[0].a.Length-1
+	while (x >= 0)
+		v[] xV = base[x].a
+		while (y >= 0)
+			;z = xV[y].e.RFind(element, z)
+			z = AdvArrayLibOff.VarArrToStringArr(xV[y].e).RFind(asStr, z)
+			; Debug.Trace("(" + x +","+ y +","+ z + ") Looking for " + asStr + " in " + AdvArrayLibOff.VarArrToStringArr(xV[y].e))
+			if (z >= 0)
+				r = new int[3]
+				r[0] = x
+				r[1] = y
+				r[2] = z
+				return r
+			endif
+			y -= 1
+		endwhile
+		x -= 1
+		y = yBase
+	endwhile
+	
+	return None
+EndFunction
+
+Function Set(BigArr arr, int index, var val) global
+	int i = arr.levels
+	int x
+	int y
+	int z
+	if (i == 3)
+		x = index / 16384
+		y = (index / 128) % 128
+		z = index % 128
+		arr.a.a[x].a[y].e[z] = val
+	elseif (i == 2)
+		x = index / 128
+		y = index % 128
+		arr.a.a[x].e[y] = val
+	else ; (i == 1)
+		arr.a.e[index] = val
+	endif
+EndFunction
+
+; end big arrays, begin 2d arrays
+
+v[] Function Getv2D(int x, int y, Var init) global
+	v[] vx = new v[x]
+	
+	if (init as string == "None")
+		for int i = 0 to x - 1
+			vx[i] = new v
+			var[] vy = new var[y]
+			vx[i].e = vy
+		endfor
+	else
+		for int i = 0 to x - 1
+			vx[i] = new v
+			var[] vy = new var[y]
+			vx[i].e = vy
+			for int j = 0 to y - 1
+				vy[j] = init
+			endfor
+		endfor
+	endif
+	
+	return vx
+EndFunction
+
+BigArr Function GetArr2D(int x, int y, Var init) global
+{Creates a "rectangular" 2d array of size (x,y)
+Note that x and y must be <= 128}
+	BigArr arr = new BigArr
+	v v = new v
+	v.a = Getv2D(x, y, init)
+	arr.a = v
+	arr.size = x*y
+	arr.levels = 2
+	return arr
+EndFunction
+
+Function Set2D(BigArr arr, int x, int y, var val) global
+	arr.a.a[x].e[y] = val
+EndFunction
+
+Var Function Get2D(BigArr arr, int x, int y) global
+	return arr.a.a[x].e[y]
+EndFunction
+
+; end 2d arrays, begin 3d arrays
+
+v[] Function Getv3D(int x, int y, int z, Var init) global
+	v[] vx = new v[x]
+	
+	if (init as string == "None")
+		for int i = 0 to x - 1
+			vx[i] = new v
+			v[] vy = new v[y]
+			vx[i].a = vy
+			for int j = 0 to y - 1
+				vy[j] = new v
+				var[] vz = new var[z]
+				vy[j].e = vz
+			endfor
+		endfor
+	else
+		for int i = 0 to x - 1
+			vx[i] = new v
+			v[] vy = new v[y]
+			vx[i].a = vy
+			for int j = 0 to y - 1
+				vy[j] = new v
+				var[] vz = new var[z]
+				vy[j].e = vz
+				for int k = 0 to z - 1
+					vz[k] = init
+				endfor
+			endfor
+		endfor
+	endif
+	
+	return vx
+EndFunction
+
+BigArr Function GetArr3D(int x, int y, int z, Var init) global
+{Creates a "rectangular prismatic" 3d array of size (x,y,z)
+Note that x, y and z must be <= 128}
+	BigArr arr = new BigArr
+	v v = new v
+	v.a = Getv3D(x, y, z, init)
+	arr.a = v
+	arr.size = x*y*z
+	arr.levels = 3
+	return arr
+EndFunction
+
+Function Set3D(BigArr arr, int x, int y, int z, var val) global
+	arr.a.a[x].a[y].e[z] = val
+EndFunction
+
+Var Function Get3D(BigArr arr, int x, int y, int z) global
+	return arr.a.a[x].a[y].e[z]
+EndFunction
+
+; end arrays, begin Var[] <-> Var stuff
+
+Var[] Function CallFunction(ScriptObject obj, string asFuncName, Var[] aParams) global
+{Nearly the same as ScriptObject.CallFunction, except for functions that return an array.
+
+Example:
+float[] Function ObjectReference.GetSafePosition(float aSearchRadius, float aSafeRadius)
+	
+If the compiler worked sanely, you would be able to do:
+	var[] args = new var[2]
+	var[0] = 1024.0
+	var[1] = 256.0
+	float[] f = ref.CallFunction("GetSafePosition", args) as float[]
+	
+Through this library, you can do:
+	float[] f = AdvArrayLib.CallFunction(ref, "GetSafePosition", args) as float[]
+}
+	return obj.CallFunction(asFuncName, aParams) as Var[]
+EndFunction
+
+Var[] Function CallGlobalFunction(string asScriptName, string asFuncName, Var[] aParams) global
+{Nearly the same as Utility.CallGlobalFunction, except for functions that return an array.
+
+Example:
+Actor[] Function Game.GetPlayerFollowers() native global
+	
+If the compiler worked sanely, you would be able to do:
+	Actor[] a = Utility.CallGlobalFunction("Game", "GetPlayerFollowers", new var[0]) as Actor[]
+	
+Through this library, you can do:
+	Actor[] a = AdvArrayLib.CallGlobalFunction("Game", "GetPlayerFollowers", new var[0]) as Actor[]
+}
+	return Utility.CallGlobalFunction(asScriptName, asFuncName, aParams) as Var[]
+EndFunction
+
+Var[] Function VarToVarArray(Var v) global
+{Attempts to cast a Var to a Var[]}
+	return v as Var[]
+EndFunction
+
+Var Function VarArrayToVar(Var[] v) global
+{Attempts to cast a Var[] to a Var}
+	; this is absurd--a Var[] cannot be directly cast to a Var, but Utility.CallGlobalFunction() can do this for us
+	v vS = new v
+	vS.e = v
+	Var[] args = new var[1]
+	args[0] = vS
+	
+	return Utility.CallGlobalFunction("AdvArrayLib", "VarArrayToVarPRIVATE", args)
+EndFunction
+
+Var[] Function VarArrayToVarPRIVATE(v v) global
+	return v.e
+EndFunction
