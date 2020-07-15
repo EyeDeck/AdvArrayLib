@@ -1,4 +1,4 @@
 # Auto detect text files and perform LF normalization
 * text=auto
 
-Scripts\AdvArrayLib.pas -linguist-generated
+Scripts/AdvArrayLib.pas -linguist-generated
