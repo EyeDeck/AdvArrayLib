@@ -3,6 +3,7 @@ AdvArrayLib, or: How I Learned to Stop Worrying and Abuse the Script Engine
 I decided to write a little Papyrus library that exposes some nifty features to vanilla Papyrus programmers that would traditionally either be impossible, or require F4SE. But, though the magic of deliberately abusing the script engine, this functionality can be yours!
 
 Usage:
+
 The library is currently split into two parts:
 - AdvArrayLib.psc, which is intended to be compiled with Caprica, and
 - AdvArrayLibOff.psc, which is intended to be compiled with the official compiler.
@@ -30,6 +31,7 @@ If you want to release code using these libraries, be sure to include the precom
 	
 	
 Arrays--features and limitations:
+
 The principal feature of this library is the BigArray:
 - You may create Var arrays with a maximum size of 128^3, or 2097152.
 - 2D and 3D arrays may be created, with a max size of 128 per axis.
