@@ -30,9 +30,8 @@ Struct BigArr
 	v a
 EndStruct
 
-; reloadscript "AdvArrayLib"
+; Abstracted 1d arrays
 
-; Generic big arrays
 BigArr Function GetBigArr(int size, Var init) global
 {Creates a pseudo-Var[] with a max size of 2^21, with minimal overhead.
 
@@ -287,51 +286,69 @@ may find the string "1" first.}
 	endif
 EndFunction
 
-;Function wtf() global
-;{Just some test code some things}
-;	Var[] v = new var[128]
-;	; v[0] = 1
-;	v[64] = 6
-;	v[32] = "A"
-;	
-;	;var vAsVar
-;	;int[] vAsIntArr
-;	;
-;	;vAsVar = VarArrayToVar( as var
-;	;
-;;	Debug.Trace(v)
-;	;Debug.Trace(vAsVar)
-;	; Debug.Trace(vAsIntArr)
-;;	Debug.Trace((VarArrayToVar(v) as int[]))
-;;	Debug.Trace((VarArrayToVar(v) as int[]).Find(6 as int, 0))
-;	;Debug.Trace(v.Find(1 as int, 0))
-;	; Debug.Trace(v.Find(1 as var, 0))
-;	
-;	String[] vS = (VarArrayToVar(v) as String[])
-;	Debug.Trace(vS.Find(6 as string, 0))
-;	return
-;	
-;	; Debug.Trace(v.Find("A", 0))
-;	; Debug.Trace((v as int[]).Find("1", 0))
-;	for int i = 0 to 127
-;		;int o
-;		var v2 = v[i]
-;		if (v[i] is int)
-;			Debug.Trace("at least " + i + " is an int...")
-;		;	o = v[i] as int
-;		endif
-;		
-;		if (v2 == (1 as var))
-;			Debug.Trace(i + " is the thing")
-;		else
-;			if (v2 as string == 1 as string)
-;				Debug.Trace(i + " is the thing as a string...")
-;			else
-;				Debug.Trace(v[i] + " != " + 1)
-;			endif
-;		endif
-;	endfor
-;EndFunction
+Function Set(BigArr arr, int index, var val) global
+	int i = arr.levels
+	int x
+	int y
+	int z
+	if (i == 3)
+		x = index / 16384
+		y = (index / 128) % 128
+		z = index % 128
+		arr.a.a[x].a[y].e[z] = val
+	elseif (i == 2)
+		x = index / 128
+		y = index % 128
+		arr.a.a[x].e[y] = val
+	else ; (i == 1)
+		arr.a.e[index] = val
+	endif
+EndFunction
+
+; end abstracted 1d arrays, begin 2d arrays
+
+BigArr Function GetArr2D(int x, int y, Var init) global
+{Creates a "rectangular" 2d array of size (x,y)
+Note that x and y must be <= 128}
+	BigArr arr = new BigArr
+	v v = new v
+	v.a = Getv2D(x, y, init)
+	arr.a = v
+	arr.size = x*y
+	arr.levels = 2
+	return arr
+EndFunction
+
+v[] Function Getv2D(int x, int y, Var init) global
+	v[] vx = new v[x]
+	
+	if (init as string == "None")
+		for int i = 0 to x - 1
+			vx[i] = new v
+			var[] vy = new var[y]
+			vx[i].e = vy
+		endfor
+	else
+		for int i = 0 to x - 1
+			vx[i] = new v
+			var[] vy = new var[y]
+			vx[i].e = vy
+			for int j = 0 to y - 1
+				vy[j] = init
+			endfor
+		endfor
+	endif
+	
+	return vx
+EndFunction
+
+Var Function Get2D(BigArr arr, int x, int y) global
+	return arr.a.a[x].e[y]
+EndFunction
+
+Function Set2D(BigArr arr, int x, int y, var val) global
+	arr.a.a[x].e[y] = val
+EndFunction
 
 int[] Function Find2D(BigArr arr, Var element, int x = 0, int y = 0) global
 {Like Array.Find, Looks for elements in y, then x, so (0,0) < (0,1) < (1,0) < (0,32) < (32,0) < (32,64) etc
@@ -389,6 +406,61 @@ may find the string "1" first.}
 	endwhile
 	
 	return None
+EndFunction
+
+; end 2d arrays, begin 3d arrays
+
+BigArr Function GetArr3D(int x, int y, int z, Var init) global
+{Creates a "rectangular prismatic" 3d array of size (x,y,z)
+Note that x, y and z must be <= 128}
+	BigArr arr = new BigArr
+	v v = new v
+	v.a = Getv3D(x, y, z, init)
+	arr.a = v
+	arr.size = x*y*z
+	arr.levels = 3
+	return arr
+EndFunction
+
+v[] Function Getv3D(int x, int y, int z, Var init) global
+	v[] vx = new v[x]
+	
+	if (init as string == "None")
+		for int i = 0 to x - 1
+			vx[i] = new v
+			v[] vy = new v[y]
+			vx[i].a = vy
+			for int j = 0 to y - 1
+				vy[j] = new v
+				var[] vz = new var[z]
+				vy[j].e = vz
+			endfor
+		endfor
+	else
+		for int i = 0 to x - 1
+			vx[i] = new v
+			v[] vy = new v[y]
+			vx[i].a = vy
+			for int j = 0 to y - 1
+				vy[j] = new v
+				var[] vz = new var[z]
+				vy[j].e = vz
+				for int k = 0 to z - 1
+					vz[k] = init
+				endfor
+			endfor
+		endfor
+	endif
+	
+	return vx
+EndFunction
+
+Function Set3D(BigArr arr, int x, int y, int z, var val) global
+	arr.a.a[x].a[y].e[z] = val
+EndFunction
+
+Var Function Get3D(BigArr arr, int x, int y, int z) global
+	return arr.a.a[x].a[y].e[z]
 EndFunction
 
 int[] Function Find3D(BigArr arr, Var element, int x = 0, int y = 0, int z = 0) global
@@ -460,125 +532,6 @@ may find the string "1" first.}
 	endwhile
 	
 	return None
-EndFunction
-
-Function Set(BigArr arr, int index, var val) global
-	int i = arr.levels
-	int x
-	int y
-	int z
-	if (i == 3)
-		x = index / 16384
-		y = (index / 128) % 128
-		z = index % 128
-		arr.a.a[x].a[y].e[z] = val
-	elseif (i == 2)
-		x = index / 128
-		y = index % 128
-		arr.a.a[x].e[y] = val
-	else ; (i == 1)
-		arr.a.e[index] = val
-	endif
-EndFunction
-
-; end big arrays, begin 2d arrays
-
-v[] Function Getv2D(int x, int y, Var init) global
-	v[] vx = new v[x]
-	
-	if (init as string == "None")
-		for int i = 0 to x - 1
-			vx[i] = new v
-			var[] vy = new var[y]
-			vx[i].e = vy
-		endfor
-	else
-		for int i = 0 to x - 1
-			vx[i] = new v
-			var[] vy = new var[y]
-			vx[i].e = vy
-			for int j = 0 to y - 1
-				vy[j] = init
-			endfor
-		endfor
-	endif
-	
-	return vx
-EndFunction
-
-BigArr Function GetArr2D(int x, int y, Var init) global
-{Creates a "rectangular" 2d array of size (x,y)
-Note that x and y must be <= 128}
-	BigArr arr = new BigArr
-	v v = new v
-	v.a = Getv2D(x, y, init)
-	arr.a = v
-	arr.size = x*y
-	arr.levels = 2
-	return arr
-EndFunction
-
-Function Set2D(BigArr arr, int x, int y, var val) global
-	arr.a.a[x].e[y] = val
-EndFunction
-
-Var Function Get2D(BigArr arr, int x, int y) global
-	return arr.a.a[x].e[y]
-EndFunction
-
-; end 2d arrays, begin 3d arrays
-
-v[] Function Getv3D(int x, int y, int z, Var init) global
-	v[] vx = new v[x]
-	
-	if (init as string == "None")
-		for int i = 0 to x - 1
-			vx[i] = new v
-			v[] vy = new v[y]
-			vx[i].a = vy
-			for int j = 0 to y - 1
-				vy[j] = new v
-				var[] vz = new var[z]
-				vy[j].e = vz
-			endfor
-		endfor
-	else
-		for int i = 0 to x - 1
-			vx[i] = new v
-			v[] vy = new v[y]
-			vx[i].a = vy
-			for int j = 0 to y - 1
-				vy[j] = new v
-				var[] vz = new var[z]
-				vy[j].e = vz
-				for int k = 0 to z - 1
-					vz[k] = init
-				endfor
-			endfor
-		endfor
-	endif
-	
-	return vx
-EndFunction
-
-BigArr Function GetArr3D(int x, int y, int z, Var init) global
-{Creates a "rectangular prismatic" 3d array of size (x,y,z)
-Note that x, y and z must be <= 128}
-	BigArr arr = new BigArr
-	v v = new v
-	v.a = Getv3D(x, y, z, init)
-	arr.a = v
-	arr.size = x*y*z
-	arr.levels = 3
-	return arr
-EndFunction
-
-Function Set3D(BigArr arr, int x, int y, int z, var val) global
-	arr.a.a[x].a[y].e[z] = val
-EndFunction
-
-Var Function Get3D(BigArr arr, int x, int y, int z) global
-	return arr.a.a[x].a[y].e[z]
 EndFunction
 
 ; end arrays, begin Var[] <-> Var stuff

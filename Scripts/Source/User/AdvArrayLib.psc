@@ -2,7 +2,7 @@ ScriptName AdvArrayLib
 { A utility library that allows users of the reference Papyrus compiler
  to do things that the compiler would normally forbid.
 
- DO NOT attempt to recompile (though it won't work anyway)
+ DO NOT attempt to recompile (though it probably won't work anyway)
 
            DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
                    Version 2, December 2004
@@ -31,9 +31,7 @@ Struct BigArr
 	; v a
 EndStruct
 
-; reloadscript "AdvArrayLib"
-
-; Generic big arrays
+; Abstracted 1D arrays:
 BigArr Function GetBigArr(int size, Var init = None) global
 {Creates a pseudo-Var[] with a max size of 2^21, with minimal overhead.
 
@@ -83,6 +81,25 @@ may find the string "1" first.}
 	return -1
 EndFunction
 
+; end big arrays, begin 2d arrays
+
+BigArr Function GetArr2D(int x, int y, Var init = None) global
+{Creates a "rectangular" 2d array of size (x,y)
+Note that x and y must be <= 128}
+	return None
+EndFunction
+
+v[] Function Getv2D(int x, int y, Var init = None) global
+	return None
+EndFunction
+
+Var Function Get2D(BigArr arr, int x, int y) global
+{Gets the element of the given 2D array at index (x,y)}
+EndFunction
+
+Function Set2D(BigArr arr, int x, int y, var val) global
+{Sets an element of the given 2D array at index (x,y) to val}
+EndFunction
 
 int[] Function Find2D(BigArr arr, Var element, int x = 0, int y = 0) global
 {Like Array.Find, Looks for elements in y, then x, so (0,0) < (0,1) < (1,0) < (0,32) < (32,0) < (32,64) etc
@@ -120,31 +137,7 @@ may find the string "1" first.}
 	return None
 EndFunction
 
-; end big arrays, begin 2d arrays
-
-v[] Function Getv2D(int x, int y, Var init = None) global
-	return None
-EndFunction
-
-BigArr Function GetArr2D(int x, int y, Var init = None) global
-{Creates a "rectangular" 2d array of size (x,y)
-Note that x and y must be <= 128}
-	return None
-EndFunction
-
-Function Set2D(BigArr arr, int x, int y, var val) global
-{Sets an element of the given 2D array at index (x,y) to val}
-EndFunction
-
-Var Function Get2D(BigArr arr, int x, int y) global
-{Gets the element of the given 2D array at index (x,y)}
-EndFunction
-
 ; end 2d arrays, begin 3d arrays
-
-v[] Function Getv3D(int x, int y, int z, Var init = None) global
-	return None
-EndFunction
 
 BigArr Function GetArr3D(int x, int y, int z, Var init = None) global
 {Creates a "rectangular prismatic" 3d array of size (x,y,z)
@@ -152,13 +145,17 @@ Note that x, y and z must be <= 128}
 	return None
 EndFunction
 
-Function Set3D(BigArr arr, int x, int y, int z, var val) global
-{Sets an element of the given 2D array at index (x,y,z) to val}
+v[] Function Getv3D(int x, int y, int z, Var init = None) global
+	return None
 EndFunction
 
 Var Function Get3D(BigArr arr, int x, int y, int z) global
 {Gets the element of the given 3D array at index (x,y,z)}
 	return None
+EndFunction
+
+Function Set3D(BigArr arr, int x, int y, int z, var val) global
+{Sets an element of the given 2D array at index (x,y,z) to val}
 EndFunction
 
 ; end arrays, begin Var[] <-> Var stuff
